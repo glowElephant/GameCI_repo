@@ -1,8 +1,5 @@
 name: Build Android & iOS (select repo/branch) — Unity 6000.2.7f2
 
-
-
-
 on:
   workflow_dispatch:
     inputs:
@@ -25,7 +22,7 @@ on:
       projectPath:
         description: "Unity project path inside the repo (usually '.')"
         required: true
-        default: "."
+        default: "test2"
 
 env:
   UNITY_VERSION: "6000.2.7f2"
@@ -104,7 +101,7 @@ jobs:
           projectPath: project/${{ inputs.projectPath }}
           buildsPath: build
           buildName: ${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-Android
-          androidAppBundle: true
+          androidExportType: androidAppBundle
           # --- 서명(선택) — Secrets에 값이 있으면 사용됨 ---
           androidKeystoreName: user.keystore
           androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
