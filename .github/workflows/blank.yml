@@ -30,35 +30,12 @@ env:
 
 
 jobs:
-  precheck:
-    name: Precheck secrets
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check UNITY_LICENSE is provided
-        run: |
-          if [ -z "${UNITY_LICENSE:-}" ]; then
-            echo "::error::UNITY_LICENSE is missing. Add it in GameCI_repo → Settings → Secrets → Actions as the full .ulf text."
-            exit 1
-          fi
-          echo "UNITY_LICENSE detected."
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-
-      - name: Check GH_PAT is provided
-        run: |
-          if [ -z "${GH_PAT:-}" ]; then
-            echo "::error::GH_PAT is missing. Add a PAT with repo read access."
-            exit 1
-          fi
-          echo "GH_PAT detected."
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+  
 
 
 
 # ====================== ANDROID ======================
   android:
-    needs: precheck
     name: Android • ${{ inputs.targetRepo }} • ${{ inputs.targetBranch }}
     runs-on: ubuntu-latest
 
@@ -119,7 +96,6 @@ jobs:
   ios:
     name: iOS • ${{ inputs.targetRepo }} • ${{ inputs.targetBranch }}
     runs-on: macos-14
-    needs: precheck  # (선택) Android 뒤에 실행하고 싶으면 유지, 병렬이면 제거
 
     steps:
       - name: Checkout target repo
