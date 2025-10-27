@@ -1,0 +1,64 @@
+name: Build selected repo (Unity 6000.2.7f2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      targetRepo:
+        description: "Repo to build (e.g., your-org-or-user/gamecitest1)"
+        required: true
+        default: "your-org-or-user/gamecitest1"
+      projectPath:
+        description: "Unity project path in repo"
+        required: true
+        default: "."
+      platform:
+        description: "Target platform"
+        required: true
+        type: choice
+        options:
+          - WebGL
+          - StandaloneWindows64
+          - Android
+          - iOS
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.targetRepo }}
+          token: ${{ secrets.GH_PAT }}
+          lfs: true
+          submodules: recursive
+          fetch-depth: 0
+          path: project
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: project/Library
+          key: Library-${{ inputs.targetRepo }}-${{ inputs.platform }}-6000.2.7f2-${{ hashFiles('project/**/Packages/manifest.json') }}
+          restore-keys: |
+            Library-${{ inputs.targetRepo }}-${{ inputs.platform }}-6000.2.7f2-
+            Library-${{ inputs.targetRepo }}-
+            Library-
+
+      - name: Build with GameCI
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: "6000.2.7f2"
+          targetPlatform: ${{ inputs.platform }}
+          projectPath: project/${{ inputs.projectPath }}
+          buildsPath: build
+          buildName: ${{ inputs.targetRepo }}-${{ inputs.platform }}
+          allowDirtyBuild: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.targetRepo }}-${{ inputs.platform }}
+          path: build/**/*
