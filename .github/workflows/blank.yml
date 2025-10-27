@@ -1,34 +1,103 @@
-name: Build selected repo (Unity 6000.2.7f2)
+name: Build Android & iOS (select repo/branch) — Unity 6000.2.7f2
 
 on:
   workflow_dispatch:
     inputs:
       targetRepo:
-        description: "Repo to build (e.g., your-org-or-user/gamecitest1)"
+        description: "Target repository to build"
+        type: choice
         required: true
-        default: "your-org-or-user/gamecitest1"
+        options:
+          - glowElephant/gamecitest1
+          - glowElephant/gamecitest2
+        default: glowElephant/gamecitest1
+      targetBranch:
+        description: "Branch to build"
+        type: choice
+        required: true
+        options:
+          - main
+          - develop
+        default: main
       projectPath:
-        description: "Unity project path in repo"
+        description: "Unity project path inside the repo (usually '.')"
         required: true
         default: "."
-      platform:
-        description: "Target platform"
-        required: true
-        type: choice
-        options:
-          - WebGL
-          - StandaloneWindows64
-          - Android
-          - iOS
 
+env:
+  UNITY_VERSION: "6000.2.7f2"
+
+# ====================== ANDROID ======================
 jobs:
-  build:
+  android:
+    name: Android • ${{ inputs.targetRepo }} • ${{ inputs.targetBranch }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.targetRepo }}
+          ref: refs/heads/${{ inputs.targetBranch }}
+          token: ${{ secrets.GH_PAT }}   # repo 읽기 권한 PAT
+          lfs: true
+          submodules: recursive
+          fetch-depth: 0
+          path: project
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: project/Library
+          key: Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-Android-${{ env.UNITY_VERSION }}-${{ hashFiles('project/**/Packages/manifest.json') }}
+          restore-keys: |
+            Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-Android-${{ env.UNITY_VERSION }}-
+            Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-
+            Library-${{ inputs.targetRepo }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-${{ env.UNITY_VERSION }}-${{ hashFiles('project/**/Packages/manifest.json') }}
+          restore-keys: gradle-
+
+      - name: Build Android (AAB, signed)
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: Android
+          projectPath: project/${{ inputs.projectPath }}
+          buildsPath: build
+          buildName: ${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-Android
+          androidAppBundle: true
+          # --- 서명(선택) — Secrets에 값이 있으면 사용됨 ---
+          androidKeystoreName: user.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass:  ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName:  ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass:  ${{ secrets.ANDROID_KEYALIAS_PASS }}
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-Android-AAB
+          path: build/**/*.aab
+
+# ====================== iOS ======================
+  ios:
+    name: iOS • ${{ inputs.targetRepo }} • ${{ inputs.targetBranch }}
+    runs-on: macos-14
+    needs: android  # (선택) Android 뒤에 실행하고 싶으면 유지, 병렬이면 제거
+
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.targetRepo }}
+          ref: refs/heads/${{ inputs.targetBranch }}
           token: ${{ secrets.GH_PAT }}
           lfs: true
           submodules: recursive
@@ -39,26 +108,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: project/Library
-          key: Library-${{ inputs.targetRepo }}-${{ inputs.platform }}-6000.2.7f2-${{ hashFiles('project/**/Packages/manifest.json') }}
+          key: Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-iOS-${{ env.UNITY_VERSION }}-${{ hashFiles('project/**/Packages/manifest.json') }}
           restore-keys: |
-            Library-${{ inputs.targetRepo }}-${{ inputs.platform }}-6000.2.7f2-
+            Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-iOS-${{ env.UNITY_VERSION }}-
+            Library-${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-
             Library-${{ inputs.targetRepo }}-
-            Library-
 
-      - name: Build with GameCI
+      - name: Build iOS (Xcode project)
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
-          unityVersion: "6000.2.7f2"
-          targetPlatform: ${{ inputs.platform }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: iOS
           projectPath: project/${{ inputs.projectPath }}
           buildsPath: build
-          buildName: ${{ inputs.targetRepo }}-${{ inputs.platform }}
-          allowDirtyBuild: true
+          buildName: ${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-iOS
 
-      - name: Upload artifacts
+      - name: Upload iOS Xcode project
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.targetRepo }}-${{ inputs.platform }}
+          name: ${{ inputs.targetRepo }}-${{ inputs.targetBranch }}-iOS-Xcode
           path: build/**/*
